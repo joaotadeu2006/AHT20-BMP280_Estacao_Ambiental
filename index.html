@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estação Meteorológica BLE - Celular</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; text-align: center; }
+    h1 { color: #333; font-size: 22px; }
+    button {
+      background-color: #007bff; color: white; border: none; padding: 14px 24px;
+      font-size: 16px; border-radius: 8px; cursor: pointer; margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    button:active { background-color: #0056b3; }
+    #status { margin-bottom: 20px; font-weight: bold; color: #555; }
+    .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; max-width: 600px; margin: auto; }
+    .card { background: white; padding: 18px; border-radius: 12px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 140px; }
+    .card h3 { margin-top: 0; color: #666; font-size: 14px; }
+    .value { font-size: 24px; font-weight: bold; color: #007bff; margin: 8px 0; }
+    .unit { font-size: 14px; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Estação ESP32-S3 (Bluetooth)</h1>
+  <button onclick="conectarBLE()">Conectar ao ESP32-S3</button>
+  <div id="status">Desconectado</div>
+
+  <div class="container">
+    <div class="card">
+      <h3>Temp. (AHT20)</h3>
+      <div class="value"><span id="tempAHT">--</span> <span class="unit">°C</span></div>
+    </div>
+    <div class="card">
+      <h3>Umidade (AHT20)</h3>
+      <div class="value"><span id="umidAHT">--</span> <span class="unit">%</span></div>
+    </div>
+    <div class="card">
+      <h3>Temp. (BMP280)</h3>
+      <div class="value"><span id="tempBMP">--</span> <span class="unit">°C</span></div>
+    </div>
+    <div class="card">
+      <h3>Pressão</h3>
+      <div class="value"><span id="pressaoBMP">--</span> <span class="unit">hPa</span></div>
+    </div>
+    <div class="card">
+      <h3>Altitude</h3>
+      <div class="value"><span id="altBMP">--</span> <span class="unit">m</span></div>
+    </div>
+  </div>
+
+  <script>
+    const SERVICE_UUID = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+    const CHARACTERISTIC_UUID = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+    async function conectarBLE() {
+      try {
+        document.getElementById('status').innerText = "Procurando ESP32-S3...";
+        
+        // Abre a janela nativa do celular para escolher o Bluetooth
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'Estacao_ESP32S3' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        document.getElementById('status').innerText = "Conectando...";
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        const characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+        // Ativa as notificações automáticas a cada 3 segundos
+        await characteristic.startNotifications();
+        document.getElementById('status').innerText = "Conectado e recebendo dados!";
+
+        characteristic.addEventListener('characteristicvaluechanged', (event) => {
+          const decoder = new TextDecoder('utf-8');
+          const jsonString = decoder.decode(event.target.value);
+          const data = JSON.parse(jsonString);
+
+          document.getElementById('tempAHT').innerText = data.tempAHT;
+          document.getElementById('umidAHT').innerText = data.umidAHT;
+          document.getElementById('tempBMP').innerText = data.tempBMP;
+          document.getElementById('pressaoBMP').innerText = data.pressaoBMP;
+          document.getElementById('altBMP').innerText = data.altBMP;
+        });
+
+        device.addEventListener('gattserverdisconnected', () => {
+          document.getElementById('status').innerText = "Desconectado do ESP32-S3.";
+        });
+
+      } catch (error) {
+        console.error(error);
+        document.getElementById('status').innerText = "Erro: " + error.message;
+      }
+    }
+  </script>
+</body>
+</html>
